@@ -56,10 +56,14 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-    @Bean
+@Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("https://nugesphramacy.vercel.app/", "https://np-admin-one.vercel.app/"));
+        // 👉 Removed trailing slashes to match browser-sent Origin headers correctly
+        config.setAllowedOrigins(List.of(
+            "https://nugesphramacy.vercel.app", 
+            "https://np-admin-one.vercel.app"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(true);
@@ -68,7 +72,6 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/**", config);
         return source;
     }
-
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
