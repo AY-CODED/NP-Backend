@@ -12,7 +12,7 @@ import java.util.Date;
 public class JwtTokenProvider {
 
     @Value("${jwt.secret}")
-    private String jwtSecret; // must be at least 32 chars for HS256
+    private String jwtSecret;
 
     @Value("${jwt.expiration}")
     private int jwtExpirationInMs;

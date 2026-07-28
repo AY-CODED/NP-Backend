@@ -8,7 +8,12 @@ import org.admin.npapplication.dto.RegisterRequest;
 import org.admin.npapplication.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -38,5 +43,18 @@ public class AuthController {
                     .badRequest()
                     .body(new ApiResponse(e.getMessage()));
         }
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<?> getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication != null && authentication.isAuthenticated() && !authentication.getPrincipal().equals("anonymousUser")) {
+            Map<String, String> response = new HashMap<>();
+            response.put("email", authentication.getName());
+            return ResponseEntity.ok(response);
+        }
+
+        return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
     }
 }
