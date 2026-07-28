@@ -23,8 +23,15 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
         String email = oAuth2User.getAttribute("email");
-        String token = jwtTokenProvider.generateToken(email, "ROLE_USER");
 
+        // 1. Dynamic role check (customize this email check or query your database)
+        boolean isAdmin = email != null && email.endsWith("@nugespharmacy.com");
+        String role = isAdmin ? "ADMIN" : "CUSTOMER";
+
+        // 2. Generate token with the correct role
+        String token = jwtTokenProvider.generateToken(email, role);
+
+        // 3. Set secure HTTP-only cookie
         Cookie jwtCookie = new Cookie("jwt", token);
         jwtCookie.setHttpOnly(true);
         jwtCookie.setSecure(true); // Required for HTTPS and SameSite=None
@@ -33,7 +40,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         jwtCookie.setMaxAge(24 * 60 * 60);
         response.addCookie(jwtCookie);
 
-        String targetUrl = "http://localhost:5173/dashboard";
+        // 4. Route to the appropriate Vercel frontend based on role
+        String targetUrl = isAdmin
+                ? "https://np-admin-one.vercel.app/home?token=" + token
+                : "https://nugesphramacy.vercel.app/home?token=" + token;
+
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
 }
