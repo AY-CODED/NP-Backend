@@ -40,7 +40,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         String targetUrl = isAdmin
                 ? "https://np-admin-one.vercel.app/home?token=" + token
-                : "https://nugesphramacy.vercel.app/home?token=" + token;
+                : "https://nugespharmacy.vercel.app/home?token=" + token;
 
         // 👉 Force clear any saved request cache so it doesn't fallback to localhost
         clearAuthenticationAttributes(request);
