@@ -7,6 +7,7 @@ import org.admin.npapplication.model.User;
 import org.admin.npapplication.repository.UserRepository;
 import org.admin.npapplication.security.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -28,6 +29,12 @@ public class AuthService {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Value("${app.cookie.secure:true}")
+    private boolean cookieSecure;
+
+    @Value("${app.cookie.samesite:None}")
+    private String cookieSameSite;
 
     public ApiResponse registerUser(RegisterRequest request) {
         if (userRepository.findByEmail(request.getEmail()).isPresent()) {
@@ -66,8 +73,8 @@ public class AuthService {
 
         Cookie cookie = new Cookie("jwt", token);
         cookie.setHttpOnly(true);
-        // For local development over HTTP:
-        cookie.setSecure(false);      // set to true in production with HTTPS
+        cookie.setSecure(cookieSecure);
+        cookie.setAttribute("SameSite", cookieSameSite);
         cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
 
