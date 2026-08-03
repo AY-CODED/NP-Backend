@@ -31,6 +31,15 @@ public class AuthController {
         return ResponseEntity.ok(loginResponse);
     }
 
+    @PostMapping("/admin/login")
+    public ResponseEntity<LoginResponse> adminLogin(
+            @RequestBody LoginRequest request,
+            HttpServletResponse response
+    ) {
+        LoginResponse loginResponse = authService.loginAdmin(request, response);
+        return ResponseEntity.ok(loginResponse);
+    }
+
     @PostMapping("/register")
     public ResponseEntity<ApiResponse> registerUser(
             @RequestBody RegisterRequest request

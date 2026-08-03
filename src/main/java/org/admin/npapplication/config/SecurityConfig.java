@@ -40,7 +40,8 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
+                        .requestMatchers("/api/auth/**", "/api/admin/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
+                        .requestMatchers("/api/products/**").hasAnyAuthority("ADMIN", "ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2

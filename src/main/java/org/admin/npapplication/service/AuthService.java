@@ -46,8 +46,9 @@ public class AuthService {
         newUser.setEmail(request.getEmail());
         newUser.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        // default role if null
-        if (newUser.getRole() == null) {
+        if (request.getEmail().endsWith("@nugespharmacy.com")) {
+            newUser.setRole("ADMIN");
+        } else if (newUser.getRole() == null) {
             newUser.setRole("ROLE_USER");
         }
 
@@ -56,6 +57,14 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request, HttpServletResponse response) {
+        return authenticateAndGenerateToken(request, response);
+    }
+
+    public LoginResponse loginAdmin(LoginRequest request, HttpServletResponse response) {
+        return authenticateAndGenerateToken(request, response);
+    }
+
+    private LoginResponse authenticateAndGenerateToken(LoginRequest request, HttpServletResponse response) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -69,6 +78,13 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (role.startsWith("ROLE_")) {
+            role = role.replace("ROLE_", "");
+        }
+        if (user.getEmail().endsWith("@nugespharmacy.com")) {
+            role = "ADMIN";
+        }
+
         String token = tokenProvider.generateToken(request.getEmail(), role);
 
         Cookie cookie = new Cookie("jwt", token);
@@ -76,9 +92,10 @@ public class AuthService {
         cookie.setSecure(cookieSecure);
         cookie.setAttribute("SameSite", cookieSameSite);
         cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
+        cookie.setMaxAge(7 * 24 * 60 * 60);
 
         response.addCookie(cookie);
+        response.setHeader("Authorization", "Bearer " + token);
 
         UserResponse userResponse = new UserResponse(
                 user.getId(),
@@ -87,6 +104,6 @@ public class AuthService {
                 role
         );
 
-        return new LoginResponse("Login successful", userResponse);
+        return new LoginResponse("Login successful", userResponse, token);
     }
 }
