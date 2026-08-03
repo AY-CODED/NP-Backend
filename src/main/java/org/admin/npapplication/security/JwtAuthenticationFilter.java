@@ -1,5 +1,7 @@
 package org.admin.npapplication.security;
 
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -31,28 +33,55 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         try {
             String jwt = getJwtFromRequest(request);
 
-            if (jwt != null && tokenProvider.validateToken(jwt)) {
-                String email = tokenProvider.getEmailFromJWT(jwt);
-                String role = tokenProvider.getRoleFromJWT(jwt);
-
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                email,
-                                null,
-                                Collections.singletonList(new SimpleGrantedAuthority(role))
-                        );
-
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+            if (jwt != null) {
+                try {
+                    if (tokenProvider.validateToken(jwt)) {
+                        setAuthenticationFromJwt(jwt, request);
+                    } else {
+                        setAuthenticationFromFirebase(jwt, request);
+                    }
+                } catch (Exception ex) {
+                    setAuthenticationFromFirebase(jwt, request);
+                }
             }
         } catch (Exception ex) {
             logger.error("Could not set user authentication in security context", ex);
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private void setAuthenticationFromJwt(String jwt, HttpServletRequest request) {
+        String email = tokenProvider.getEmailFromJWT(jwt);
+        String role = tokenProvider.getRoleFromJWT(jwt);
+        setAuthentication(email, role, request);
+    }
+
+    private void setAuthenticationFromFirebase(String jwt, HttpServletRequest request) throws Exception {
+        FirebaseToken firebaseToken = FirebaseAuth.getInstance().verifyIdToken(jwt);
+        String email = firebaseToken.getEmail();
+        boolean isAdmin = email != null && email.endsWith("@nugespharmacy.com");
+        String role = isAdmin ? "ADMIN" : "USER";
+        setAuthentication(email, role, request);
+    }
+
+    private void setAuthentication(String email, String role, HttpServletRequest request) {
+        if (email == null || email.isBlank()) {
+            return;
+        }
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        email,
+                        null,
+                        Collections.singletonList(new SimpleGrantedAuthority(role))
+                );
+
+        authentication.setDetails(
+                new WebAuthenticationDetailsSource().buildDetails(request)
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
