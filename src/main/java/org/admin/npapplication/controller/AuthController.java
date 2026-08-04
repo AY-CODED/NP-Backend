@@ -5,14 +5,12 @@ import org.admin.npapplication.dto.ApiResponse;
 import org.admin.npapplication.dto.LoginRequest;
 import org.admin.npapplication.dto.LoginResponse;
 import org.admin.npapplication.dto.RegisterRequest;
+import org.admin.npapplication.dto.UserResponse;
 import org.admin.npapplication.service.AuthService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -55,15 +53,17 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ResponseEntity<?> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication != null && authentication.isAuthenticated() && !authentication.getPrincipal().equals("anonymousUser")) {
-            Map<String, String> response = new HashMap<>();
-            response.put("email", authentication.getName());
-            return ResponseEntity.ok(response);
+    public ResponseEntity<UserResponse> getCurrentUser() {
+        UserResponse user = authService.getCurrentUser();
+        if (user != null) {
+            return ResponseEntity.ok(user);
         }
+        return ResponseEntity.status(401).build();
+    }
 
-        return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse> logout(HttpServletResponse response) {
+        authService.logout(response);
+        return ResponseEntity.ok(new ApiResponse("Logged out successfully"));
     }
 }

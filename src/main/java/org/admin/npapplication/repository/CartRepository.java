@@ -1,14 +1,12 @@
 package org.admin.npapplication.repository;
 
-import org.admin.npapplication.model.User;
+import org.admin.npapplication.model.Cart;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
 @Repository
-public interface UserRepository extends JpaRepository<User, Long> {
-    Optional<User> findByEmail(String email);
-
-    Long countByRole(String role);
+public interface CartRepository extends JpaRepository<Cart, Long> {
+    Optional<Cart> findByUserId(Long userId);
 }

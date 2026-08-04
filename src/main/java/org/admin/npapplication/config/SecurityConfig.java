@@ -41,8 +41,11 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/admin/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
+                        .requestMatchers("/api/health").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers("/api/products/**").hasAnyAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/cart/**", "/api/wishlist/**", "/api/orders/**", "/api/profile/**", "/api/contact", "/api/promo/**").authenticated()
+                        .requestMatchers("/api/admin/promos/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2

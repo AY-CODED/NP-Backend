@@ -106,4 +106,41 @@ public class AuthService {
 
         return new LoginResponse("Login successful", userResponse, token);
     }
+
+    public UserResponse getCurrentUser() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication == null || !authentication.isAuthenticated() 
+                || authentication.getPrincipal().equals("anonymousUser")) {
+            return null;
+        }
+
+        String email = authentication.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
+        if (adminCheckService.isAdmin(user.getEmail())) {
+            role = "ROLE_ADMIN";
+        }
+
+        return new UserResponse(
+                user.getId(),
+                user.getFullname(),
+                user.getEmail(),
+                role
+        );
+    }
+
+    public void logout(HttpServletResponse response) {
+        Cookie cookie = new Cookie("jwt", "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setAttribute("SameSite", cookieSameSite);
+        cookie.setPath("/");
+        cookie.setMaxAge(0);
+        response.addCookie(cookie);
+        
+        SecurityContextHolder.clearContext();
+    }
 }

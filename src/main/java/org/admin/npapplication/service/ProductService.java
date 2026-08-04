@@ -7,6 +7,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,10 +45,10 @@ public class ProductService {
         if (updatedProduct.getDescription() != null) {
             existing.setDescription(updatedProduct.getDescription());
         }
-        if (updatedProduct.getPrice() > 0) {
+        if (updatedProduct.getPrice() != null && updatedProduct.getPrice().compareTo(BigDecimal.ZERO) > 0) {
             existing.setPrice(updatedProduct.getPrice());
         }
-        if (updatedProduct.getStock() >= 0) {
+        if (updatedProduct.getStock() != null && updatedProduct.getStock() >= 0) {
             existing.setStock(updatedProduct.getStock());
         }
         if (updatedProduct.getCategory() != null && !updatedProduct.getCategory().isBlank()) {
@@ -59,8 +60,8 @@ public class ProductService {
         if (updatedProduct.getImage() != null) {
             existing.setImage(updatedProduct.getImage());
         }
-        existing.setFeatured(updatedProduct.isFeatured());
-        existing.setActive(updatedProduct.isActive());
+        existing.setFeatured(updatedProduct.getFeatured());
+        existing.setActive(updatedProduct.getActive());
 
         return productRepository.save(existing);
     }
@@ -95,6 +96,6 @@ public class ProductService {
 
     public Optional<Product> getPublicProductById(Long id) {
         return productRepository.findById(id)
-                .filter(Product::isActive);
+                .filter(Product::getActive);
     }
 }
