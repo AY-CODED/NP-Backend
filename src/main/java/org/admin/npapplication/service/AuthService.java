@@ -30,6 +30,9 @@ public class AuthService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private AdminCheckService adminCheckService;
+
     @Value("${app.cookie.secure:true}")
     private boolean cookieSecure;
 
@@ -46,8 +49,8 @@ public class AuthService {
         newUser.setEmail(request.getEmail());
         newUser.setPassword(passwordEncoder.encode(request.getPassword()));
 
-        if (request.getEmail().endsWith("@nugespharmacy.com")) {
-            newUser.setRole("ADMIN");
+        if (adminCheckService.isAdmin(request.getEmail())) {
+            newUser.setRole("ROLE_ADMIN");
         } else if (newUser.getRole() == null) {
             newUser.setRole("ROLE_USER");
         }
@@ -78,11 +81,8 @@ public class AuthService {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (role.startsWith("ROLE_")) {
-            role = role.replace("ROLE_", "");
-        }
-        if (user.getEmail().endsWith("@nugespharmacy.com")) {
-            role = "ADMIN";
+        if (adminCheckService.isAdmin(user.getEmail())) {
+            role = "ROLE_ADMIN";
         }
 
         String token = tokenProvider.generateToken(request.getEmail(), role);

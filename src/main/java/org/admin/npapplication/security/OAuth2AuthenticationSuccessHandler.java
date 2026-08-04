@@ -4,6 +4,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.admin.npapplication.service.AdminCheckService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -19,6 +20,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
 
+    @Autowired
+    private AdminCheckService adminCheckService;
+
     @Value("${app.cookie.secure:true}")
     private boolean cookieSecure;
 
@@ -31,9 +35,9 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         String email = oAuth2User.getAttribute("email");
 
-        // Dynamic role check
-        boolean isAdmin = email != null && email.endsWith("@nugespharmacy.com");
-        String role = isAdmin ? "ADMIN" : "CUSTOMER";
+        // Check admin status from Firebase
+        boolean isAdmin = email != null && adminCheckService.isAdmin(email);
+        String role = isAdmin ? "ROLE_ADMIN" : "ROLE_CUSTOMER";
 
         String token = jwtTokenProvider.generateToken(email, role);
 

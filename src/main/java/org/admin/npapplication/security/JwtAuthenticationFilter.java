@@ -7,6 +7,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.admin.npapplication.service.AdminCheckService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -23,6 +24,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Autowired
     private JwtTokenProvider tokenProvider;
+
+    @Autowired
+    private AdminCheckService adminCheckService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -60,8 +64,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private void setAuthenticationFromFirebase(String jwt, HttpServletRequest request) throws Exception {
         FirebaseToken firebaseToken = FirebaseAuth.getInstance().verifyIdToken(jwt);
         String email = firebaseToken.getEmail();
-        boolean isAdmin = email != null && email.endsWith("@nugespharmacy.com");
-        String role = isAdmin ? "ADMIN" : "USER";
+        boolean isAdmin = email != null && adminCheckService.isAdmin(email);
+        String role = isAdmin ? "ROLE_ADMIN" : "ROLE_USER";
         setAuthentication(email, role, request);
     }
 
