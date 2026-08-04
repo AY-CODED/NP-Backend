@@ -37,7 +37,7 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
 
         // Check admin status from Firebase
         boolean isAdmin = email != null && adminCheckService.isAdmin(email);
-        String role = isAdmin ? "ROLE_ADMIN" : "ROLE_CUSTOMER";
+        String role = isAdmin ? "ROLE_ADMIN" : "ROLE_USER";
 
         String token = jwtTokenProvider.generateToken(email, role);
 

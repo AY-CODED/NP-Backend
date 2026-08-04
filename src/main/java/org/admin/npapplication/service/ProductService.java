@@ -3,6 +3,8 @@ package org.admin.npapplication.service;
 import org.admin.npapplication.model.Product;
 import org.admin.npapplication.repository.ProductRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -68,5 +70,31 @@ public class ProductService {
             throw new IllegalArgumentException("Product not found");
         }
         productRepository.deleteById(id);
+    }
+
+    // Public read methods
+    public Page<Product> getPublicProducts(Pageable pageable) {
+        return productRepository.findByActiveTrueAndFeaturedTrue(pageable);
+    }
+
+    public Page<Product> getFeaturedProducts(Pageable pageable) {
+        return productRepository.findByActiveTrueAndFeaturedTrue(pageable);
+    }
+
+    public Page<Product> getProductsByCategory(String category, Pageable pageable) {
+        return productRepository.findByActiveTrueAndCategory(category, pageable);
+    }
+
+    public Page<Product> searchProducts(String query, Pageable pageable) {
+        return productRepository.findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query, pageable);
+    }
+
+    public Page<Product> getAllActiveProducts(Pageable pageable) {
+        return productRepository.findByActiveTrue(pageable);
+    }
+
+    public Optional<Product> getPublicProductById(Long id) {
+        return productRepository.findById(id)
+                .filter(Product::isActive);
     }
 }

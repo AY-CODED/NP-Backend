@@ -38,9 +38,10 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/api/admin/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
+                        .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers("/api/products/**").hasAnyAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated()
                 )
@@ -61,10 +62,10 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
         // 👉 Removed trailing slashes to match browser-sent Origin headers correctly
-        config.setAllowedOrigins(List.of(
-            "https://nugesphramacy.vercel.app", 
+config.setAllowedOrigins(List.of(
+            "https://nugespharmacy.vercel.app",
             "https://np-admin-one.vercel.app"
-        ));
+    ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(true);
