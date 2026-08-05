@@ -1,5 +1,7 @@
 package org.admin.npapplication.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.admin.npapplication.dto.*;
 import org.admin.npapplication.model.*;
 import org.admin.npapplication.repository.*;
@@ -10,7 +12,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,6 +37,8 @@ public class OrderService {
     @Autowired
     private UserRepository userRepository;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     public OrderDto createOrder(User user, CreateOrderRequest request) {
         Cart cart = cartRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Cart is empty"));
@@ -58,8 +61,8 @@ public class OrderService {
         Order order = new Order();
         order.setUser(user);
         order.setStatus(OrderStatus.PENDING);
-        order.setShippingAddress(request.getShippingAddress().toString());
-        order.setBillingAddress(request.getBillingAddress() != null ? request.getBillingAddress().toString() : null);
+        order.setShippingAddress(toJson(request.getShippingAddress()));
+        order.setBillingAddress(request.getBillingAddress() != null ? toJson(request.getBillingAddress()) : null);
 
         BigDecimal subtotal = BigDecimal.ZERO;
 
@@ -93,6 +96,17 @@ public class OrderService {
         cartRepository.save(cart);
 
         return mapToDto(order);
+    }
+
+    private String toJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid address payload", e);
+        }
     }
 
     public Page<OrderDto> getUserOrders(User user, Pageable pageable) {
@@ -134,6 +148,11 @@ public class OrderService {
     }
 
     public OrderStatsDto getOrderStats() {
+        BigDecimal paidRevenue = orderRepository.sumTotalByPaymentStatus(PaymentStatus.PAID);
+        if (paidRevenue == null) {
+            paidRevenue = BigDecimal.ZERO;
+        }
+
         OrderStatsDto stats = new OrderStatsDto();
         stats.setTotalOrders(orderRepository.count());
         stats.setPendingOrders(orderRepository.countByStatus(OrderStatus.PENDING));
@@ -141,10 +160,8 @@ public class OrderService {
         stats.setShippedOrders(orderRepository.countByStatus(OrderStatus.SHIPPED));
         stats.setDeliveredOrders(orderRepository.countByStatus(OrderStatus.DELIVERED));
         stats.setCancelledOrders(orderRepository.countByStatus(OrderStatus.CANCELLED));
-        stats.setTotalRevenue(orderRepository.sumTotalByPaymentStatus(PaymentStatus.PAID) != null ? 
-                orderRepository.sumTotalByPaymentStatus(PaymentStatus.PAID) : BigDecimal.ZERO);
-        stats.setPaidRevenue(orderRepository.sumTotalByPaymentStatus(PaymentStatus.PAID) != null ? 
-                orderRepository.sumTotalByPaymentStatus(PaymentStatus.PAID) : BigDecimal.ZERO);
+        stats.setTotalRevenue(paidRevenue);
+        stats.setPaidRevenue(paidRevenue);
         return stats;
     }
 

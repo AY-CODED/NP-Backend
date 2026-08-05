@@ -40,12 +40,16 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/**", "/api/admin/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
+                        // Only genuinely public endpoints go here. /api/admin/** must NOT be
+                        // permitAll - Spring Security evaluates matchers in declaration order,
+                        // and a permitAll here would have shadowed the hasRole("ADMIN") rule
+                        // below for every /api/admin/** request, including /api/admin/promos/**.
+                        .requestMatchers("/api/auth/**", "/login/oauth2/**", "/oauth2/**", "/error").permitAll()
                         .requestMatchers("/api/health").permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/products/**").permitAll()
                         .requestMatchers("/api/products/**").hasAnyAuthority("ROLE_ADMIN")
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/cart/**", "/api/wishlist/**", "/api/orders/**", "/api/profile/**", "/api/contact", "/api/promo/**").authenticated()
-                        .requestMatchers("/api/admin/promos/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
@@ -61,14 +65,13 @@ public class SecurityConfig {
         return configuration.getAuthenticationManager();
     }
 
-@Bean
+    @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        // 👉 Removed trailing slashes to match browser-sent Origin headers correctly
-config.setAllowedOrigins(List.of(
-            "https://nugespharmacy.vercel.app",
-            "https://np-admin-one.vercel.app"
-    ));
+        config.setAllowedOrigins(List.of(
+                "https://nugespharmacy.vercel.app",
+                "https://np-admin-one.vercel.app"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
         config.setAllowCredentials(true);
@@ -77,6 +80,7 @@ config.setAllowedOrigins(List.of(
         source.registerCorsConfiguration("/**", config);
         return source;
     }
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

@@ -61,7 +61,7 @@ public class ProductService {
             existing.setImage(updatedProduct.getImage());
         }
         existing.setFeatured(updatedProduct.getFeatured());
-        existing.setActive(updatedProduct.getActive());
+        existing.setActive(updatedProduct.isActive());
 
         return productRepository.save(existing);
     }
@@ -96,6 +96,6 @@ public class ProductService {
 
     public Optional<Product> getPublicProductById(Long id) {
         return productRepository.findById(id)
-                .filter(Product::getActive);
+                .filter(Product::isActive);
     }
 }

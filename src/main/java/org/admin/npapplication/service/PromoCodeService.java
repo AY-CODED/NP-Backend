@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -167,7 +168,9 @@ public class PromoCodeService {
     private BigDecimal calculateDiscount(PromoCode promoCode, BigDecimal orderAmount) {
         BigDecimal discount;
         if (promoCode.getType() == PromoType.PERCENT) {
-            discount = orderAmount.multiply(promoCode.getValue()).divide(BigDecimal.valueOf(100));
+            // scale=2, HALF_UP avoids ArithmeticException on non-terminating decimals
+            discount = orderAmount.multiply(promoCode.getValue())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         } else {
             discount = promoCode.getValue();
         }
