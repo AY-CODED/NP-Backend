@@ -39,5 +39,9 @@ public class Product {
 
     private Boolean featured = false;
 
-    private Boolean active = true;
+    // Changed from Boolean -> primitive boolean so Lombok generates isActive()
+    // instead of getActive(). CartService, WishlistService, and OrderService
+    // all call product.isActive(), which did not compile against Boolean.
+    @Builder.Default
+    private boolean active = true;
 }

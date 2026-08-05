@@ -3,6 +3,8 @@ package org.admin.npapplication.model;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.math.BigDecimal;
+
 @Entity
 @Table(name = "cart_items")
 @Getter
@@ -36,6 +38,11 @@ public class CartItem {
     }
 
     public Double getTotalPrice() {
-        return product.getPrice() * quantity;
+        if (product == null || product.getPrice() == null || quantity == null) {
+            return 0.0;
+        }
+        return product.getPrice()
+                .multiply(BigDecimal.valueOf(quantity))
+                .doubleValue();
     }
 }
