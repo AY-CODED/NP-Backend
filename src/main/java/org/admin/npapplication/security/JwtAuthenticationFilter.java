@@ -1,5 +1,6 @@
 package org.admin.npapplication.security;
 
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.FilterChain;
@@ -7,8 +8,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.admin.npapplication.service.AdminCheckService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.admin.npapplication.model.User;
+import org.admin.npapplication.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,87 +20,127 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Locale;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private JwtTokenProvider tokenProvider;
+    private final JwtTokenProvider tokenProvider;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private AdminCheckService adminCheckService;
+    @Value("${app.cookie.name:jwt}")
+    private String authCookieName;
+
+    public JwtAuthenticationFilter(
+            JwtTokenProvider tokenProvider,
+            UserRepository userRepository
+    ) {
+        this.tokenProvider = tokenProvider;
+        this.userRepository = userRepository;
+    }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain filterChain)
-            throws ServletException, IOException {
-
+    protected void doFilterInternal(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain
+    ) throws ServletException, IOException {
         try {
-            String jwt = getJwtFromRequest(request);
+            if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                String bearerToken = getBearerToken(request);
 
-            if (jwt != null) {
-                try {
-                    if (tokenProvider.validateToken(jwt)) {
-                        setAuthenticationFromJwt(jwt, request);
-                    } else {
-                        setAuthenticationFromFirebase(jwt, request);
+                if (bearerToken != null) {
+                    authenticateBearerToken(bearerToken, request);
+                } else {
+                    String cookieToken = getCookieToken(request);
+                    if (cookieToken != null && tokenProvider.validateToken(cookieToken)) {
+                        authenticateApplicationToken(cookieToken, request);
                     }
-                } catch (Exception ex) {
-                    setAuthenticationFromFirebase(jwt, request);
                 }
             }
         } catch (Exception ex) {
-            logger.error("Could not set user authentication in security context", ex);
+            logger.warn("Authentication token could not be verified");
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);
     }
 
-    private void setAuthenticationFromJwt(String jwt, HttpServletRequest request) {
-        String email = tokenProvider.getEmailFromJWT(jwt);
-        String role = tokenProvider.getRoleFromJWT(jwt);
-        setAuthentication(email, role, request);
-    }
+    private void authenticateBearerToken(String token, HttpServletRequest request) throws Exception {
+        if (tokenProvider.validateToken(token)) {
+            authenticateApplicationToken(token, request);
+            return;
+        }
 
-    private void setAuthenticationFromFirebase(String jwt, HttpServletRequest request) throws Exception {
-        FirebaseToken firebaseToken = FirebaseAuth.getInstance().verifyIdToken(jwt);
+        if (FirebaseApp.getApps().isEmpty()) {
+            return;
+        }
+
+        FirebaseToken firebaseToken = FirebaseAuth.getInstance().verifyIdToken(token);
         String email = firebaseToken.getEmail();
-        boolean isAdmin = email != null && adminCheckService.isAdmin(email);
+        if (email == null || email.isBlank()) {
+            return;
+        }
+        boolean isAdmin = Boolean.TRUE.equals(firebaseToken.getClaims().get("admin"));
         String role = isAdmin ? "ROLE_ADMIN" : "ROLE_USER";
-        setAuthentication(email, role, request);
+
+        Object principal = userRepository.findByEmailIgnoreCase(email)
+                .<Object>map(user -> user)
+                .orElse(email);
+        setAuthentication(principal, email, role, request);
     }
 
-    private void setAuthentication(String email, String role, HttpServletRequest request) {
+    private void authenticateApplicationToken(String token, HttpServletRequest request) {
+        String email = tokenProvider.getEmailFromJWT(token).toLowerCase(Locale.ROOT).trim();
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+        if (user == null) {
+            return;
+        }
+
+        String role = normalizeRole(tokenProvider.getRoleFromJWT(token));
+        setAuthentication(user, user.getEmail(), role, request);
+    }
+
+    private void setAuthentication(
+            Object principal,
+            String email,
+            String role,
+            HttpServletRequest request
+    ) {
         if (email == null || email.isBlank()) {
             return;
         }
 
         UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(
-                        email,
+                        principal,
                         null,
                         Collections.singletonList(new SimpleGrantedAuthority(role))
                 );
-
-        authentication.setDetails(
-                new WebAuthenticationDetailsSource().buildDetails(request)
-        );
-
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 
-    private String getJwtFromRequest(HttpServletRequest request) {
+    private String normalizeRole(String role) {
+        return "ROLE_ADMIN".equals(role) ? "ROLE_ADMIN" : "ROLE_USER";
+    }
+
+    private String getBearerToken(HttpServletRequest request) {
         String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
             return authorizationHeader.substring(7);
         }
+        return null;
+    }
 
+    private String getCookieToken(HttpServletRequest request) {
         Cookie[] cookies = request.getCookies();
-        if (cookies == null) return null;
+        if (cookies == null) {
+            return null;
+        }
 
         for (Cookie cookie : cookies) {
-            if ("jwt".equals(cookie.getName())) {
+            if (authCookieName.equals(cookie.getName())) {
                 return cookie.getValue();
             }
         }

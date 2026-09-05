@@ -1,12 +1,12 @@
 package org.admin.npapplication.security;
 
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.admin.npapplication.model.User;
 import org.admin.npapplication.service.AdminCheckService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.admin.npapplication.service.OAuthUserService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
@@ -17,46 +17,60 @@ import java.io.IOException;
 @Component
 public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
-    @Autowired
-    private JwtTokenProvider jwtTokenProvider;
+    private final JwtTokenProvider jwtTokenProvider;
+    private final AuthCookieService authCookieService;
+    private final AdminCheckService adminCheckService;
+    private final OAuthUserService oAuthUserService;
 
-    @Autowired
-    private AdminCheckService adminCheckService;
+    @Value("${app.frontend.customer-url}")
+    private String customerFrontendUrl;
 
-    @Value("${app.cookie.secure:true}")
-    private boolean cookieSecure;
+    @Value("${app.frontend.admin-url}")
+    private String adminFrontendUrl;
 
-    @Value("${app.cookie.samesite:None}")
-    private String cookieSameSite;
+    public OAuth2AuthenticationSuccessHandler(
+            JwtTokenProvider jwtTokenProvider,
+            AuthCookieService authCookieService,
+            AdminCheckService adminCheckService,
+            OAuthUserService oAuthUserService
+    ) {
+        this.jwtTokenProvider = jwtTokenProvider;
+        this.authCookieService = authCookieService;
+        this.adminCheckService = adminCheckService;
+        this.oAuthUserService = oAuthUserService;
+    }
 
     @Override
-    public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response, Authentication authentication) throws IOException, ServletException {
+    public void onAuthenticationSuccess(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Authentication authentication
+    ) throws IOException {
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
-
         String email = oAuth2User.getAttribute("email");
+        Boolean emailVerified = oAuth2User.getAttribute("email_verified");
 
-        // Check admin status from Firebase
-        boolean isAdmin = email != null && adminCheckService.isAdmin(email);
-        String role = isAdmin ? "ROLE_ADMIN" : "ROLE_USER";
+        if (email == null || email.isBlank() || !Boolean.TRUE.equals(emailVerified)) {
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "A verified Google email is required");
+            return;
+        }
 
-        String token = jwtTokenProvider.generateToken(email, role);
+        boolean isAdmin = adminCheckService.isAdmin(email);
+        String fullName = oAuth2User.getAttribute("name");
+        User user = oAuthUserService.findOrCreate(email, fullName, isAdmin);
+        boolean effectiveAdmin = isAdmin || "ROLE_ADMIN".equals(user.getRole());
+        String role = effectiveAdmin ? "ROLE_ADMIN" : "ROLE_USER";
+        String token = jwtTokenProvider.generateToken(user.getEmail(), role);
 
-        Cookie jwtCookie = new Cookie("jwt", token);
-        jwtCookie.setHttpOnly(true);
-        jwtCookie.setSecure(cookieSecure);
-        jwtCookie.setAttribute("SameSite", cookieSameSite);
-        jwtCookie.setPath("/");
-        jwtCookie.setMaxAge(24 * 60 * 60);
-        response.addCookie(jwtCookie);
-
-        String targetUrl = isAdmin
-                ? "https://np-admin-one.vercel.app/home?token=" + token
-                : "https://nugespharmacy.vercel.app/home?token=" + token;
-
-        // 👉 Force clear any saved request cache so it doesn't fallback to localhost
+        authCookieService.addAuthenticationCookie(response, token);
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
         clearAuthenticationAttributes(request);
-        
-        // 👉 Directly redirect to the target URL
-        getRedirectStrategy().sendRedirect(request, response, targetUrl);
+
+        String frontend = effectiveAdmin ? adminFrontendUrl : customerFrontendUrl;
+        getRedirectStrategy().sendRedirect(request, response, stripTrailingSlash(frontend) + "/home");
+    }
+
+    private String stripTrailingSlash(String value) {
+        return value.endsWith("/") ? value.substring(0, value.length() - 1) : value;
     }
 }

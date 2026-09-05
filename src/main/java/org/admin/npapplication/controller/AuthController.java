@@ -1,64 +1,61 @@
 package org.admin.npapplication.controller;
 
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import org.admin.npapplication.dto.ApiResponse;
 import org.admin.npapplication.dto.LoginRequest;
 import org.admin.npapplication.dto.LoginResponse;
 import org.admin.npapplication.dto.RegisterRequest;
 import org.admin.npapplication.dto.UserResponse;
 import org.admin.npapplication.service.AuthService;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    @Autowired
-    private AuthService authService;
+    private final AuthService authService;
+
+    public AuthController(AuthService authService) {
+        this.authService = authService;
+    }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
-            @RequestBody LoginRequest request,
+            @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
-        LoginResponse loginResponse = authService.login(request, response);
-        return ResponseEntity.ok(loginResponse);
+        return ResponseEntity.ok(authService.login(request, response));
     }
 
     @PostMapping("/admin/login")
     public ResponseEntity<LoginResponse> adminLogin(
-            @RequestBody LoginRequest request,
+            @Valid @RequestBody LoginRequest request,
             HttpServletResponse response
     ) {
-        LoginResponse loginResponse = authService.loginAdmin(request, response);
-        return ResponseEntity.ok(loginResponse);
+        return ResponseEntity.ok(authService.loginAdmin(request, response));
     }
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse> registerUser(
-            @RequestBody RegisterRequest request
+            @Valid @RequestBody RegisterRequest request
     ) {
-        try {
-            ApiResponse res = authService.registerUser(request);
-            return ResponseEntity.ok(res);
-        } catch (Exception e) {
-            return ResponseEntity
-                    .badRequest()
-                    .body(new ApiResponse(e.getMessage()));
-        }
+        ApiResponse result = authService.registerUser(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(result);
     }
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getCurrentUser() {
         UserResponse user = authService.getCurrentUser();
-        if (user != null) {
-            return ResponseEntity.ok(user);
-        }
-        return ResponseEntity.status(401).build();
+        return user == null
+                ? ResponseEntity.status(HttpStatus.UNAUTHORIZED).build()
+                : ResponseEntity.ok(user);
     }
 
     @PostMapping("/logout")
