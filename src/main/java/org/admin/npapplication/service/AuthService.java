@@ -1,146 +1,134 @@
 package org.admin.npapplication.service;
 
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
-import org.admin.npapplication.dto.*;
+import org.admin.npapplication.dto.ApiResponse;
+import org.admin.npapplication.dto.LoginRequest;
+import org.admin.npapplication.dto.LoginResponse;
+import org.admin.npapplication.dto.RegisterRequest;
+import org.admin.npapplication.dto.UserResponse;
 import org.admin.npapplication.model.User;
 import org.admin.npapplication.repository.UserRepository;
+import org.admin.npapplication.security.AuthCookieService;
 import org.admin.npapplication.security.JwtTokenProvider;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Locale;
 
 @Service
 public class AuthService {
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
+    private final JwtTokenProvider tokenProvider;
+    private final PasswordEncoder passwordEncoder;
+    private final AuthCookieService authCookieService;
 
-    @Autowired
-    private UserRepository userRepository;
+    public AuthService(
+            AuthenticationManager authenticationManager,
+            UserRepository userRepository,
+            JwtTokenProvider tokenProvider,
+            PasswordEncoder passwordEncoder,
+            AuthCookieService authCookieService
+    ) {
+        this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
+        this.tokenProvider = tokenProvider;
+        this.passwordEncoder = passwordEncoder;
+        this.authCookieService = authCookieService;
+    }
 
-    @Autowired
-    private JwtTokenProvider tokenProvider;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @Autowired
-    private AdminCheckService adminCheckService;
-
-    @Value("${app.cookie.secure:true}")
-    private boolean cookieSecure;
-
-    @Value("${app.cookie.samesite:None}")
-    private String cookieSameSite;
-
+    @Transactional
     public ApiResponse registerUser(RegisterRequest request) {
-        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
-            throw new RuntimeException("An account with this email already exists.");
+        String email = normalizeEmail(request.getEmail());
+        if (userRepository.findByEmailIgnoreCase(email).isPresent()) {
+            throw new IllegalArgumentException("An account with this email already exists.");
         }
 
         User newUser = new User();
-        newUser.setFullname(request.getFullname());
-        newUser.setEmail(request.getEmail());
+        newUser.setFullname(request.getFullname().trim());
+        newUser.setEmail(email);
         newUser.setPassword(passwordEncoder.encode(request.getPassword()));
-
-        if (adminCheckService.isAdmin(request.getEmail())) {
-            newUser.setRole("ROLE_ADMIN");
-        } else if (newUser.getRole() == null) {
-            newUser.setRole("ROLE_USER");
-        }
+        // Public registration must never create an administrator account.
+        newUser.setRole("ROLE_USER");
 
         userRepository.save(newUser);
         return new ApiResponse("Account created successfully!");
     }
 
     public LoginResponse login(LoginRequest request, HttpServletResponse response) {
-        return authenticateAndGenerateToken(request, response);
+        return authenticateAndCreateSession(request, response, false);
     }
 
     public LoginResponse loginAdmin(LoginRequest request, HttpServletResponse response) {
-        return authenticateAndGenerateToken(request, response);
+        return authenticateAndCreateSession(request, response, true);
     }
 
-    private LoginResponse authenticateAndGenerateToken(LoginRequest request, HttpServletResponse response) {
+    private LoginResponse authenticateAndCreateSession(
+            LoginRequest request,
+            HttpServletResponse response,
+            boolean adminOnly
+    ) {
+        String email = normalizeEmail(request.getEmail());
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+                new UsernamePasswordAuthenticationToken(email, request.getPassword()));
 
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+        String role = user.getRole() == null ? "ROLE_USER" : user.getRole();
 
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (adminCheckService.isAdmin(user.getEmail())) {
-            role = "ROLE_ADMIN";
+        if (adminOnly && !"ROLE_ADMIN".equals(role)) {
+            throw new BadCredentialsException("Invalid admin credentials");
         }
 
-        String token = tokenProvider.generateToken(request.getEmail(), role);
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        String token = tokenProvider.generateToken(user.getEmail(), role);
+        authCookieService.addAuthenticationCookie(response, token);
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
 
-        Cookie cookie = new Cookie("jwt", token);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setAttribute("SameSite", cookieSameSite);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-
-        response.addCookie(cookie);
-        response.setHeader("Authorization", "Bearer " + token);
-
-        UserResponse userResponse = new UserResponse(
-                user.getId(),
-                user.getFullname(),
-                user.getEmail(),
-                role
-        );
-
-        return new LoginResponse("Login successful", userResponse, token);
+        return new LoginResponse("Login successful", toUserResponse(user, role));
     }
 
     public UserResponse getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-
-        if (authentication == null || !authentication.isAuthenticated() 
-                || authentication.getPrincipal().equals("anonymousUser")) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || "anonymousUser".equals(authentication.getPrincipal())) {
             return null;
         }
 
-        String email = authentication.getName();
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        String role = user.getRole() != null ? user.getRole() : "ROLE_USER";
-        if (adminCheckService.isAdmin(user.getEmail())) {
-            role = "ROLE_ADMIN";
+        User user;
+        if (authentication.getPrincipal() instanceof User authenticatedUser) {
+            user = authenticatedUser;
+        } else {
+            user = userRepository.findByEmailIgnoreCase(authentication.getName())
+                    .orElse(null);
         }
 
-        return new UserResponse(
-                user.getId(),
-                user.getFullname(),
-                user.getEmail(),
-                role
-        );
+        if (user == null) {
+            return null;
+        }
+
+        String role = user.getRole() == null ? "ROLE_USER" : user.getRole();
+        return toUserResponse(user, role);
     }
 
     public void logout(HttpServletResponse response) {
-        Cookie cookie = new Cookie("jwt", "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setAttribute("SameSite", cookieSameSite);
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
-        
+        authCookieService.clearAuthenticationCookie(response);
         SecurityContextHolder.clearContext();
+    }
+
+    private UserResponse toUserResponse(User user, String role) {
+        return new UserResponse(user.getId(), user.getFullname(), user.getEmail(), role);
+    }
+
+    private String normalizeEmail(String email) {
+        return email.toLowerCase(Locale.ROOT).trim();
     }
 }
