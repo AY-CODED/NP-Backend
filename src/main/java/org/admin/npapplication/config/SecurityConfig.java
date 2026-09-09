@@ -105,6 +105,7 @@ public class SecurityConfig {
                                 "/api/wishlist/**",
                                 "/api/orders/**",
                                 "/api/payments/**",
+                                "/api/prescriptions/**",
                                 "/api/profile/**",
                                 "/api/contact",
                                 "/api/promo/**"
