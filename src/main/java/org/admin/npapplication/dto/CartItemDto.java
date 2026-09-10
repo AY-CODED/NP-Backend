@@ -18,4 +18,7 @@ public class CartItemDto {
     private Integer quantity;
     private BigDecimal totalPrice;
     private Boolean inStock;
+    private Boolean prescriptionRequired;
+    private Integer approvedPrescriptionQuantity;
+    private Boolean prescriptionReady;
 }

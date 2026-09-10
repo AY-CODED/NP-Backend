@@ -8,6 +8,7 @@ import org.admin.npapplication.service.PaymentGatewayException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 @RestControllerAdvice
 public class RestExceptionHandler {
@@ -36,5 +37,11 @@ public class RestExceptionHandler {
     public ResponseEntity<ApiResponse> handlePaymentGateway(PaymentGatewayException exception) {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(new ApiResponse(exception.getMessage()));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse> handleUploadTooLarge() {
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiResponse("Prescription file must not exceed 5 MB"));
     }
 }

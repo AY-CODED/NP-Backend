@@ -31,6 +31,7 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final ProductRepository productRepository;
     private final PromoCodeService promoCodeService;
+    private final PrescriptionService prescriptionService;
     private final ObjectMapper objectMapper;
     private final BigDecimal shippingCost;
     private final BigDecimal vatRate;
@@ -43,6 +44,7 @@ public class OrderService {
             CartRepository cartRepository,
             ProductRepository productRepository,
             PromoCodeService promoCodeService,
+            PrescriptionService prescriptionService,
             ObjectMapper objectMapper,
             @Value("${app.checkout.shipping-cost:1500}") BigDecimal shippingCost,
             @Value("${app.checkout.vat-rate:0.075}") BigDecimal vatRate,
@@ -54,6 +56,7 @@ public class OrderService {
         this.cartRepository = cartRepository;
         this.productRepository = productRepository;
         this.promoCodeService = promoCodeService;
+        this.prescriptionService = prescriptionService;
         this.objectMapper = objectMapper;
         this.shippingCost = shippingCost;
         this.vatRate = vatRate;
@@ -93,9 +96,14 @@ public class OrderService {
                     .orElseThrow(() -> new IllegalArgumentException("Product not found"));
             validateProductForOrder(product, cartItem.getQuantity());
 
+            Prescription prescription = product.isPrescriptionRequired()
+                    ? prescriptionService.reserveForOrder(user, product, cartItem.getQuantity())
+                    : null;
+
             OrderItem orderItem = new OrderItem();
             orderItem.setOrder(order);
             orderItem.setProduct(product);
+            orderItem.setPrescription(prescription);
             orderItem.setProductName(product.getName());
             orderItem.setProductPrice(product.getPrice());
             orderItem.setQuantity(cartItem.getQuantity());
@@ -365,11 +373,6 @@ public class OrderService {
         if (!product.isActive()) {
             throw new IllegalArgumentException("Product " + product.getName() + " is no longer available");
         }
-        if (product.isPrescriptionRequired()) {
-            throw new IllegalArgumentException(
-                    "Product " + product.getName() + " requires pharmacist prescription approval"
-            );
-        }
         if (quantity < 1 || quantity > product.getStock()) {
             throw new IllegalArgumentException("Not enough stock for " + product.getName());
         }
@@ -384,6 +387,7 @@ public class OrderService {
                     .orElseThrow(() -> new IllegalArgumentException("Product not found"));
             product.setStock(product.getStock() + item.getQuantity());
             productRepository.save(product);
+            prescriptionService.releaseReservation(item.getPrescription(), item.getQuantity());
         }
         order.setStockReserved(false);
     }
@@ -393,6 +397,13 @@ public class OrderService {
             Product product = productRepository.findByIdForUpdate(item.getProduct().getId())
                     .orElseThrow(() -> new IllegalArgumentException("Product not found"));
             validateProductForOrder(product, item.getQuantity());
+            if (product.isPrescriptionRequired()) {
+                item.setPrescription(prescriptionService.reserveExisting(
+                        item.getPrescription(),
+                        product,
+                        item.getQuantity()
+                ));
+            }
             product.setStock(product.getStock() - item.getQuantity());
             productRepository.save(product);
         }
@@ -425,6 +436,10 @@ public class OrderService {
                 .productPrice(item.getProductPrice())
                 .quantity(item.getQuantity())
                 .totalPrice(item.getTotalPrice())
+                .prescriptionId(item.getPrescription() == null ? null : item.getPrescription().getId())
+                .prescriptionStatus(item.getPrescription() == null
+                        ? null
+                        : item.getPrescription().getStatus().name())
                 .build();
     }
 }
