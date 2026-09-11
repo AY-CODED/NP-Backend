@@ -28,6 +28,9 @@ public class CartService {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PrescriptionService prescriptionService;
+
     public CartDto getOrCreateCart(User user) {
         Cart cart = cartRepository.findByUserId(user.getId())
                 .orElseGet(() -> createCart(user));
@@ -138,6 +141,10 @@ public class CartService {
 
     private CartItemDto mapItemToDto(CartItem item) {
         Product product = item.getProduct();
+        int approvedQuantity = prescriptionService.getAvailableQuantity(
+                item.getCart().getUser(),
+                product
+        );
         return CartItemDto.builder()
                 .id(item.getId())
                 .productId(product.getId())
@@ -147,6 +154,12 @@ public class CartService {
                 .quantity(item.getQuantity())
                 .totalPrice(product.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                 .inStock(product.getStock() > 0)
+                .prescriptionRequired(product.isPrescriptionRequired())
+                .approvedPrescriptionQuantity(approvedQuantity)
+                .prescriptionReady(
+                        !product.isPrescriptionRequired()
+                                || approvedQuantity >= item.getQuantity()
+                )
                 .build();
     }
 }
