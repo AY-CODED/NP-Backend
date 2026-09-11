@@ -2,6 +2,7 @@ package org.admin.npapplication.security;
 
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -10,6 +11,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.admin.npapplication.model.User;
 import org.admin.npapplication.repository.UserRepository;
+import org.admin.npapplication.service.OAuthUserService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -27,16 +29,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
+    private final OAuthUserService oAuthUserService;
 
     @Value("${app.cookie.name:jwt}")
     private String authCookieName;
 
     public JwtAuthenticationFilter(
             JwtTokenProvider tokenProvider,
-            UserRepository userRepository
+            UserRepository userRepository,
+            OAuthUserService oAuthUserService
     ) {
         this.tokenProvider = tokenProvider;
         this.userRepository = userRepository;
+        this.oAuthUserService = oAuthUserService;
     }
 
     @Override
@@ -72,28 +77,51 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (FirebaseApp.getApps().isEmpty()) {
-            return;
-        }
+        FirebaseToken firebaseToken = verifyFirebaseToken(token);
+        if (firebaseToken == null) return;
 
-        FirebaseToken firebaseToken = FirebaseAuth.getInstance().verifyIdToken(token);
         String email = firebaseToken.getEmail();
         if (email == null || email.isBlank()) {
             return;
         }
         boolean isAdmin = Boolean.TRUE.equals(firebaseToken.getClaims().get("admin"));
+        if (!isAdmin && !firebaseToken.isEmailVerified()) {
+            return;
+        }
+
         String role = isAdmin ? "ROLE_ADMIN" : "ROLE_USER";
 
-        Object principal = userRepository.findByEmailIgnoreCase(email)
-                .<Object>map(user -> user)
-                .orElse(email);
+        User principal = oAuthUserService.findOrCreate(
+                email,
+                firebaseToken.getName(),
+                isAdmin,
+                firebaseToken.isEmailVerified()
+        );
         setAuthentication(principal, email, role, request);
+    }
+
+    private FirebaseToken verifyFirebaseToken(String token) {
+        for (FirebaseApp firebaseApp : FirebaseApp.getApps()) {
+            try {
+                return FirebaseAuth.getInstance(firebaseApp).verifyIdToken(token);
+            } catch (FirebaseAuthException | IllegalStateException ignored) {
+                // Try the next configured Firebase project. Np-Admin and the
+                // customer website intentionally use separate projects.
+            }
+        }
+
+        return null;
     }
 
     private void authenticateApplicationToken(String token, HttpServletRequest request) {
         String email = tokenProvider.getEmailFromJWT(token).toLowerCase(Locale.ROOT).trim();
         User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
         if (user == null) {
+            return;
+        }
+
+        if (tokenProvider.getCredentialVersionFromJWT(token)
+                != user.getEffectiveCredentialVersion()) {
             return;
         }
 

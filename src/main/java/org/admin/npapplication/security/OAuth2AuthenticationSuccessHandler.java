@@ -60,7 +60,11 @@ public class OAuth2AuthenticationSuccessHandler extends SimpleUrlAuthenticationS
         User user = oAuthUserService.findOrCreate(email, fullName, isAdmin);
         boolean effectiveAdmin = isAdmin || "ROLE_ADMIN".equals(user.getRole());
         String role = effectiveAdmin ? "ROLE_ADMIN" : "ROLE_USER";
-        String token = jwtTokenProvider.generateToken(user.getEmail(), role);
+        String token = jwtTokenProvider.generateToken(
+                user.getEmail(),
+                role,
+                user.getEffectiveCredentialVersion()
+        );
 
         authCookieService.addAuthenticationCookie(response, token);
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
