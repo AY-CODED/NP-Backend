@@ -32,6 +32,7 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final PromoCodeService promoCodeService;
     private final PrescriptionService prescriptionService;
+    private final NotificationService notificationService;
     private final ObjectMapper objectMapper;
     private final BigDecimal shippingCost;
     private final BigDecimal vatRate;
@@ -45,6 +46,7 @@ public class OrderService {
             ProductRepository productRepository,
             PromoCodeService promoCodeService,
             PrescriptionService prescriptionService,
+            NotificationService notificationService,
             ObjectMapper objectMapper,
             @Value("${app.checkout.shipping-cost:1500}") BigDecimal shippingCost,
             @Value("${app.checkout.vat-rate:0.075}") BigDecimal vatRate,
@@ -57,6 +59,7 @@ public class OrderService {
         this.productRepository = productRepository;
         this.promoCodeService = promoCodeService;
         this.prescriptionService = prescriptionService;
+        this.notificationService = notificationService;
         this.objectMapper = objectMapper;
         this.shippingCost = shippingCost;
         this.vatRate = vatRate;
@@ -133,6 +136,8 @@ public class OrderService {
         cart.getItems().clear();
         cartRepository.save(cart);
 
+        notificationService.orderCreated(savedOrder);
+
         return mapToDto(savedOrder);
     }
 
@@ -160,6 +165,7 @@ public class OrderService {
     public OrderDto updateOrderStatus(Long orderId, UpdateOrderStatusRequest request) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new IllegalArgumentException("Order not found"));
+        OrderStatus previousStatus = order.getStatus();
         OrderStatus newStatus;
 
         try {
@@ -182,7 +188,11 @@ public class OrderService {
         }
 
         order.setStatus(newStatus);
-        return mapToDto(orderRepository.save(order));
+        Order savedOrder = orderRepository.save(order);
+        if (previousStatus != newStatus) {
+            notificationService.orderStatusChanged(savedOrder);
+        }
+        return mapToDto(savedOrder);
     }
 
     public OrderDto markPaymentPaid(String paymentReference, String providerTransactionId) {
@@ -208,7 +218,9 @@ public class OrderService {
             promoCodeService.incrementUsageCount(order.getPromoCode());
         }
 
-        return mapToDto(orderRepository.save(order));
+        Order savedOrder = orderRepository.save(order);
+        notificationService.paymentConfirmed(savedOrder);
+        return mapToDto(savedOrder);
     }
 
     @Scheduled(fixedDelayString = "${app.checkout.expiry-scan-ms:300000}")

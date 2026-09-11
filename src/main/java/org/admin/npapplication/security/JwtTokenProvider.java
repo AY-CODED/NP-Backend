@@ -33,13 +33,14 @@ public class JwtTokenProvider {
         signingKey = Keys.hmacShaKeyFor(secretBytes);
     }
 
-    public String generateToken(String email, String role) {
+    public String generateToken(String email, String role, int credentialVersion) {
         Date now = new Date();
         Date expiryDate = new Date(now.getTime() + jwtExpirationInMs);
 
         return Jwts.builder()
                 .setSubject(email)
                 .claim("role", role)
+                .claim("credentialVersion", credentialVersion)
                 .setIssuedAt(now)
                 .setExpiration(expiryDate)
                 .signWith(signingKey, SignatureAlgorithm.HS256)
@@ -52,6 +53,11 @@ public class JwtTokenProvider {
 
     public String getRoleFromJWT(String token) {
         return parseClaims(token).get("role", String.class);
+    }
+
+    public int getCredentialVersionFromJWT(String token) {
+        Integer version = parseClaims(token).get("credentialVersion", Integer.class);
+        return version == null ? 0 : version;
     }
 
     public boolean validateToken(String token) {

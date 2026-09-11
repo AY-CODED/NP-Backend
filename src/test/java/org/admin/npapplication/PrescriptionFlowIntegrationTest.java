@@ -7,6 +7,8 @@ import org.admin.npapplication.dto.PrescriptionDto;
 import org.admin.npapplication.dto.ReviewPrescriptionRequest;
 import org.admin.npapplication.dto.UpdateOrderStatusRequest;
 import org.admin.npapplication.model.Product;
+import org.admin.npapplication.model.Prescription;
+import org.admin.npapplication.model.Order;
 import org.admin.npapplication.model.User;
 import org.admin.npapplication.repository.CartRepository;
 import org.admin.npapplication.repository.OrderRepository;
@@ -17,11 +19,13 @@ import org.admin.npapplication.repository.UserRepository;
 import org.admin.npapplication.service.CartService;
 import org.admin.npapplication.service.OrderService;
 import org.admin.npapplication.service.PrescriptionService;
+import org.admin.npapplication.service.NotificationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
@@ -33,6 +37,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -47,6 +53,7 @@ class PrescriptionFlowIntegrationTest {
     @Autowired private CartService cartService;
     @Autowired private PrescriptionService prescriptionService;
     @Autowired private OrderService orderService;
+    @MockBean private NotificationService notificationService;
 
     private User customer;
     private Product prescriptionProduct;
@@ -114,6 +121,7 @@ class PrescriptionFlowIntegrationTest {
                 "pharmacist@example.com"
         );
         assertEquals(2, approved.getAvailableQuantity());
+        verify(notificationService).prescriptionReviewed(any(Prescription.class));
 
         OrderDto order = orderService.createOrder(customer, orderRequest());
         assertEquals(uploaded.getId(), order.getItems().get(0).getPrescriptionId());
@@ -126,6 +134,8 @@ class PrescriptionFlowIntegrationTest {
                 order.getId(),
                 new UpdateOrderStatusRequest("CANCELLED")
         );
+        verify(notificationService).orderCreated(any(Order.class));
+        verify(notificationService).orderStatusChanged(any(Order.class));
 
         PrescriptionDto restored = prescriptionService.getCustomerPrescriptions(
                 customer,
