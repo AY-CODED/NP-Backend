@@ -3,9 +3,13 @@ package org.admin.npapplication.controller;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.admin.npapplication.dto.ApiResponse;
+import org.admin.npapplication.dto.EmailAddressRequest;
 import org.admin.npapplication.dto.LoginRequest;
 import org.admin.npapplication.dto.LoginResponse;
 import org.admin.npapplication.dto.RegisterRequest;
+import org.admin.npapplication.dto.RegistrationResponse;
+import org.admin.npapplication.dto.ResetPasswordRequest;
+import org.admin.npapplication.dto.TokenRequest;
 import org.admin.npapplication.dto.UserResponse;
 import org.admin.npapplication.service.AuthService;
 import org.springframework.http.HttpStatus;
@@ -43,11 +47,39 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse> registerUser(
+    public ResponseEntity<RegistrationResponse> registerUser(
             @Valid @RequestBody RegisterRequest request
     ) {
-        ApiResponse result = authService.registerUser(request);
+        RegistrationResponse result = authService.registerUser(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(result);
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ApiResponse> forgotPassword(
+            @Valid @RequestBody EmailAddressRequest request
+    ) {
+        return ResponseEntity.ok(authService.requestPasswordReset(request));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<ApiResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request
+    ) {
+        return ResponseEntity.ok(authService.resetPassword(request));
+    }
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<ApiResponse> verifyEmail(
+            @Valid @RequestBody TokenRequest request
+    ) {
+        return ResponseEntity.ok(authService.verifyEmail(request));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse> resendVerification(
+            @Valid @RequestBody EmailAddressRequest request
+    ) {
+        return ResponseEntity.ok(authService.resendEmailVerification(request));
     }
 
     @GetMapping("/me")

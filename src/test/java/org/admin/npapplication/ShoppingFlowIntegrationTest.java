@@ -6,6 +6,7 @@ import org.admin.npapplication.dto.CreateOrderRequest;
 import org.admin.npapplication.dto.FlutterwavePaymentResponse;
 import org.admin.npapplication.dto.OrderDto;
 import org.admin.npapplication.model.OrderStatus;
+import org.admin.npapplication.model.Order;
 import org.admin.npapplication.model.PaymentStatus;
 import org.admin.npapplication.model.Product;
 import org.admin.npapplication.model.User;
@@ -17,6 +18,7 @@ import org.admin.npapplication.service.CartService;
 import org.admin.npapplication.service.FlutterwaveClient;
 import org.admin.npapplication.service.FlutterwavePaymentService;
 import org.admin.npapplication.service.OrderService;
+import org.admin.npapplication.service.NotificationService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,6 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -50,6 +55,7 @@ class ShoppingFlowIntegrationTest {
     @Autowired private FlutterwavePaymentService paymentService;
 
     @MockBean private FlutterwaveClient flutterwaveClient;
+    @MockBean private NotificationService notificationService;
 
     private User customer;
     private Product product;
@@ -105,6 +111,8 @@ class ShoppingFlowIntegrationTest {
                 .build();
         OrderDto pending = orderService.createOrder(customer, request);
 
+        verify(notificationService).orderCreated(any(Order.class));
+
         assertEquals(PaymentStatus.PENDING.name(), pending.getPaymentStatus());
         assertEquals(OrderStatus.PENDING.name(), pending.getStatus());
         assertEquals(3, productRepository.findById(product.getId()).orElseThrow().getStock());
@@ -143,6 +151,7 @@ class ShoppingFlowIntegrationTest {
         assertEquals(OrderStatus.CONFIRMED.name(), paid.getStatus());
         assertEquals(PaymentStatus.PAID.name(), repeated.getPaymentStatus());
         assertEquals(3, productRepository.findById(product.getId()).orElseThrow().getStock());
+        verify(notificationService, times(1)).paymentConfirmed(any(Order.class));
     }
 
     @Test

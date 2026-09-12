@@ -5,6 +5,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.admin.npapplication.service.PaymentGatewayException;
+import org.admin.npapplication.service.EmailVerificationRequiredException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,6 +18,14 @@ public class RestExceptionHandler {
     public ResponseEntity<ApiResponse> handleBadCredentials() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(new ApiResponse("Invalid email or password"));
+    }
+
+    @ExceptionHandler(EmailVerificationRequiredException.class)
+    public ResponseEntity<ApiResponse> handleEmailVerificationRequired(
+            EmailVerificationRequiredException exception
+    ) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiResponse(exception.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

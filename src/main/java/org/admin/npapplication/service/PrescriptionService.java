@@ -36,17 +36,20 @@ public class PrescriptionService {
     private final PrescriptionRepository prescriptionRepository;
     private final PrescriptionDocumentRepository prescriptionDocumentRepository;
     private final ProductRepository productRepository;
+    private final NotificationService notificationService;
     private final long maxFileSize;
 
     public PrescriptionService(
             PrescriptionRepository prescriptionRepository,
             PrescriptionDocumentRepository prescriptionDocumentRepository,
             ProductRepository productRepository,
+            NotificationService notificationService,
             @Value("${app.prescriptions.max-file-size-bytes:5242880}") long maxFileSize
     ) {
         this.prescriptionRepository = prescriptionRepository;
         this.prescriptionDocumentRepository = prescriptionDocumentRepository;
         this.productRepository = productRepository;
+        this.notificationService = notificationService;
         this.maxFileSize = maxFileSize;
     }
 
@@ -146,7 +149,9 @@ public class PrescriptionService {
         prescription.setReviewReason(reason);
         prescription.setReviewedBy(reviewerEmail);
         prescription.setReviewedAt(LocalDateTime.now());
-        return mapToDto(prescriptionRepository.save(prescription));
+        Prescription savedPrescription = prescriptionRepository.save(prescription);
+        notificationService.prescriptionReviewed(savedPrescription);
+        return mapToDto(savedPrescription);
     }
 
     @Transactional(readOnly = true)
